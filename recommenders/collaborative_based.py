@@ -38,9 +38,10 @@ from sklearn.neighbors import NearestNeighbors
 
 # utils import
 from fuzzywuzzy import fuzz
-ratings = pd.read_csv('resources\ratings.csv')
+
+ratings = pd.read_csv('resources/data/ratings.csv')
 ratings.drop('timestamp', axis=1, inplace=True)
-movies = pd.read_csv('resources\movies.csv')
+movies = pd.read_csv('resources/data/movies.csv')
 
 def fuzzy_matching(mapper, fav_movie, verbose=True):
     """
@@ -144,18 +145,18 @@ def collab_model(movie_list,top_n=10):
     df_movies_cnt = pd.DataFrame(ratings.groupby('movieId').size(), columns=['count'])
 
     # filter data
-    popularity_thres = 50
+    popularity_thres = 24
     popular_movies = list(set(df_movies_cnt.query('count >= @popularity_thres').index))
     df_ratings_drop_movies = ratings[ratings.movieId.isin(popular_movies)]
 
     # get number of ratings given by every user
     df_users_cnt = pd.DataFrame(df_ratings_drop_movies.groupby('userId').size(), columns=['count'])
 
-    ratings_thres = 25
+    ratings_thres = 20
     active_users = list(set(df_users_cnt.query('count >= @ratings_thres').index))
     df_ratings_drop_users = df_ratings_drop_movies[df_ratings_drop_movies.userId.isin(active_users)]
 
-    movies = pd.read_csv('movies.csv')
+    movies = pd.read_csv('resources/data/movies.csv')
     movies = movies.set_index('movieId')
 
     df_ratings_drop_users = df_ratings_drop_users.append({'userId':672, 'movieId': movies[movies.title == movie_list[0]].index[0], 'rating': 5 } , ignore_index=True)
@@ -203,11 +204,16 @@ def collab_model(movie_list,top_n=10):
             n_recommendations=10)
 
     for i in rec1:
-    final_list.append(i)
+        final_list.append(i)
     for i in rec2:
-    final_list.append(i)
+        final_list.append(i)
     for i in rec3:
-    final_list.append(i)
+        final_list.append(i)
 
-    set(final_list)
+    for i in final_list:
+        if i in movie_list:
+            final_list.remove(i)
+
+    final_list = list(dict.fromkeys(final_list))
+    
     return final_list[0:10]
