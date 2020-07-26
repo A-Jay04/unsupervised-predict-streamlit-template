@@ -210,10 +210,12 @@ def collab_model(movie_list,top_n=10):
     for i in rec3:
         final_list.append(i)
 
-    for i in final_list:
-        if i in movie_list:
-            final_list.remove(i)
-
-    final_list = list(dict.fromkeys(final_list))
+    final_f = []
     
-    return final_list[0:10]
+    for i in final_list:
+        if i not in movie_list:
+            final_f.append(i)
+
+    final_f = list(dict.fromkeys(final_f))
+    
+    return final_f[0:10]
