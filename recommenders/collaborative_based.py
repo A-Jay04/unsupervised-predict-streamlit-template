@@ -28,59 +28,19 @@
 """
 
 # Script dependencies
+import pickle
+# data science imports
+import math
 import numpy as np
 import pandas as pd
-import scipy as sp
-
-from sklearn.metrics.pairwise import cosine_similarity 
-from sklearn.feature_extraction.text import TfidfVectorizer
-
 from scipy.sparse import csr_matrix
 from sklearn.neighbors import NearestNeighbors
+
+# utils import
 from fuzzywuzzy import fuzz
-
-# Libraries used during sorting procedures.
-import operator # <-- Convienient item retrieval during iteration 
-import heapq # <-- Efficient sorting of large lists
-
-# Imported for our sanity
-import warnings
-warnings.filterwarnings('ignore')
-
-# Importing data
-movies = pd.read_csv('resources/data/movies.csv',sep = ',',delimiter=',',usecols=['movieId', 'title'])
-ratings = pd.read_csv('resources/data/ratings.csv',usecols=['userId', 'movieId', 'rating'], 
-                            dtype={'userId': 'int32', 'movieId': 'int32', 'rating': 'float32'})
-#ratings.drop(['timestamp'], axis=1,inplace=True)
-
-# We make use of an SVD model trained on a subset of the MovieLens 10k dataset.
-model=pickle.load(open('resources/models/KNN_model.pkl', 'rb'))
-
-#DATA PROCESSING
-# get rating frequency
-df_movies_cnt = pd.DataFrame(ratings.groupby('movieId').size(), columns=['count'])
-
-# filter data
-popularity_thres = 50
-popular_movies = list(set(df_movies_cnt.query('count >= @popularity_thres').index))
-df_ratings_drop_movies = ratings[ratings.movieId.isin(popular_movies)]
-
-# get number of ratings given by every user
-df_users_cnt = pd.DataFrame(df_ratings_drop_movies.groupby('userId').size(), columns=['count'])
-
-ratings_thres = 25
-active_users = list(set(df_users_cnt.query('count >= @ratings_thres').index))
-df_ratings_drop_users = df_ratings_drop_movies[df_ratings_drop_movies.userId.isin(active_users)]
-
-# pivot and create movie-user matrix
-movie_user_mat = df_ratings_drop_users.pivot(index='movieId', columns='userId', values='rating').fillna(0)
-# create mapper from movie title to index
-movie_to_idx = {
-    movie: i for i, movie in 
-    enumerate(list(movies.set_index('movieId').loc[movie_user_mat.index].title))
-}
-# transform matrix to scipy sparse matrix
-movie_user_mat_sparse = csr_matrix(movie_user_mat.values)
+ratings = pd.read_csv('resources\ratings.csv')
+ratings.drop('timestamp', axis=1, inplace=True)
+movies = pd.read_csv('resources\movies.csv')
 
 def fuzzy_matching(mapper, fav_movie, verbose=True):
     """
@@ -106,10 +66,12 @@ def fuzzy_matching(mapper, fav_movie, verbose=True):
             match_tuple.append((title, idx, ratio))
     # sort
     match_tuple = sorted(match_tuple, key=lambda x: x[2])[::-1]
-    if not match_tuple:
-        return
-    if verbose:
-        return match_tuple[0][1]
+    #if not match_tuple:
+        #print('Oops! No match is found')
+    #    return
+    #if verbose:
+        #print('Found possible matches in our database: {0}\n'.format([x[0] for x in match_tuple]))
+    return match_tuple[0][1]
 
 
 
@@ -134,9 +96,18 @@ def make_recommendation(model_knn, data, mapper, fav_movie, n_recommendations):
     ------
     list of top n similar movie recommendations
     """
+    # fit
+    # define model
+    #model_knn = NearestNeighbors(metric='cosine', algorithm='brute', n_neighbors=10, n_jobs=-1)
+    # fit
+    #model_knn.fit(movie_user_mat_sparse)
+    
     # get input movie index
+    #print('You have input movie:', fav_movie)
     idx = fuzzy_matching(mapper, fav_movie, verbose=True)
     # inference
+    #print('Recommendation system start to make inference')
+    #print('......\n')
     distances, indices = model_knn.kneighbors(data[idx], n_neighbors=n_recommendations+1)
     # get list of raw idx of recommendations
     raw_recommends = \
@@ -168,15 +139,75 @@ def collab_model(movie_list,top_n=10):
         Titles of the top-n movie recommendations to the user.
 
     """
-    final_list = []
-    for i in movie_list:
-        rec =   make_recommendation(
-                model_knn=model_knn,
-                data=movie_user_mat_sparse,
-                fav_movie=i,
-                mapper=movie_to_idx,
-                n_recommendations=4) 
-        for v in rec:
-            final_list.append(v)
     
-    return final_list
+    # get rating frequency
+    df_movies_cnt = pd.DataFrame(ratings.groupby('movieId').size(), columns=['count'])
+
+    # filter data
+    popularity_thres = 50
+    popular_movies = list(set(df_movies_cnt.query('count >= @popularity_thres').index))
+    df_ratings_drop_movies = ratings[ratings.movieId.isin(popular_movies)]
+
+    # get number of ratings given by every user
+    df_users_cnt = pd.DataFrame(df_ratings_drop_movies.groupby('userId').size(), columns=['count'])
+
+    ratings_thres = 25
+    active_users = list(set(df_users_cnt.query('count >= @ratings_thres').index))
+    df_ratings_drop_users = df_ratings_drop_movies[df_ratings_drop_movies.userId.isin(active_users)]
+
+    movies = pd.read_csv('movies.csv')
+    movies = movies.set_index('movieId')
+
+    df_ratings_drop_users = df_ratings_drop_users.append({'userId':672, 'movieId': movies[movies.title == movie_list[0]].index[0], 'rating': 5 } , ignore_index=True)
+    df_ratings_drop_users = df_ratings_drop_users.append({'userId':672, 'movieId': movies[movies.title == movie_list[1]].index[0], 'rating': 5 } , ignore_index=True)
+    df_ratings_drop_users = df_ratings_drop_users.append({'userId':672, 'movieId': movies[movies.title == movie_list[2]].index[0], 'rating': 5 } , ignore_index=True)
+    df_ratings_drop_users = df_ratings_drop_users.drop_duplicates() 
+
+    # pivot and create movie-user matrix
+
+    movie_user_mat = df_ratings_drop_users.pivot(index='movieId', columns='userId', values='rating').fillna(0)
+
+    # create mapper from movie title to index
+    movie_to_idx = {
+        movie: i for i, movie in 
+        enumerate(list(movies.loc[movie_user_mat.index].title)) #check index hasnt been made already
+    }
+    # transform matrix to scipy sparse matrix
+    movie_user_mat_sparse = csr_matrix(movie_user_mat.values)
+
+    model_knn = NearestNeighbors(metric='cosine', algorithm='brute', n_neighbors=10, n_jobs=-1)
+    # fit
+    model_knn.fit(movie_user_mat_sparse)
+
+    final_list = []
+
+    rec1 =   make_recommendation(
+            model_knn=model_knn,
+            data=movie_user_mat_sparse,
+            fav_movie=movie_list[0],
+            mapper=movie_to_idx,
+            n_recommendations=10)
+
+    rec2 =   make_recommendation(
+            model_knn=model_knn,
+            data=movie_user_mat_sparse,
+            fav_movie=movie_list[1],
+            mapper=movie_to_idx,
+            n_recommendations=10)
+
+    rec3 =   make_recommendation(
+            model_knn=model_knn,
+            data=movie_user_mat_sparse,
+            fav_movie=movie_list[2],
+            mapper=movie_to_idx,
+            n_recommendations=10)
+
+    for i in rec1:
+    final_list.append(i)
+    for i in rec2:
+    final_list.append(i)
+    for i in rec3:
+    final_list.append(i)
+
+    set(final_list)
+    return final_list[0:10]
