@@ -48,10 +48,10 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Importing data
-movies = pd.read_csv('~/unsupervised_data/unsupervised_movie_data/movies.csv',sep = ',',delimiter=',',usecols=['movieId', 'title'])
-ratings = pd.read_csv('~/unsupervised_data/unsupervised_movie_data/train.csv',usecols=['userId', 'movieId', 'rating'], 
+movies = pd.read_csv('resources/data/movies.csv',sep = ',',delimiter=',',usecols=['movieId', 'title'])
+ratings = pd.read_csv('resources/data/ratings.csv',usecols=['userId', 'movieId', 'rating'], 
                             dtype={'userId': 'int32', 'movieId': 'int32', 'rating': 'float32'})
-ratings.drop(['timestamp'], axis=1,inplace=True)
+#ratings.drop(['timestamp'], axis=1,inplace=True)
 
 # We make use of an SVD model trained on a subset of the MovieLens 10k dataset.
 model=pickle.load(open('resources/models/KNN_model.pkl', 'rb'))
