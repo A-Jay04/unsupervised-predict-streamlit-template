@@ -188,21 +188,21 @@ def collab_model(movie_list,top_n=10):
             data=movie_user_mat_sparse,
             fav_movie=movie_list[0],
             mapper=movie_to_idx,
-            n_recommendations=10)
+            n_recommendations=15)
 
     rec2 =   make_recommendation(
             model_knn=model_knn,
             data=movie_user_mat_sparse,
             fav_movie=movie_list[1],
             mapper=movie_to_idx,
-            n_recommendations=10)
+            n_recommendations=15)
 
     rec3 =   make_recommendation(
             model_knn=model_knn,
             data=movie_user_mat_sparse,
             fav_movie=movie_list[2],
             mapper=movie_to_idx,
-            n_recommendations=10)
+            n_recommendations=15)
 
     for i in rec1:
         final_list.append(i)
