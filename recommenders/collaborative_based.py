@@ -140,7 +140,8 @@ def collab_model(movie_list,top_n=10):
         Titles of the top-n movie recommendations to the user.
 
     """
-    
+    ratings = pd.read_csv('resources/data/ratings.csv')
+    ratings.drop('timestamp', axis=1, inplace=True)
     # get rating frequency
     df_movies_cnt = pd.DataFrame(ratings.groupby('movieId').size(), columns=['count'])
 
