@@ -45,7 +45,12 @@ movies = pd.read_csv('resources/data/movies.csv')
 
 def fuzzy_matching(mapper, fav_movie, verbose=True):
     """
-    return the closest match via fuzzy ratio. If no match found, return None
+    return the closest match via fuzzy ratio.
+    match will always be found due to adding selection
+    to the training data.
+    
+    Note: code has been edited from online sources. See notebook
+    for details.
     
     Parameters
     ----------    
@@ -67,23 +72,19 @@ def fuzzy_matching(mapper, fav_movie, verbose=True):
             match_tuple.append((title, idx, ratio))
     # sort
     match_tuple = sorted(match_tuple, key=lambda x: x[2])[::-1]
-    #if not match_tuple:
-        #print('Oops! No match is found')
-    #    return
-    #if verbose:
-        #print('Found possible matches in our database: {0}\n'.format([x[0] for x in match_tuple]))
+
     return match_tuple[0][1]
-
-
 
 def make_recommendation(model_knn, data, mapper, fav_movie, n_recommendations):
     """
     return top n similar movie recommendations based on user's input movie
 
+    Note: code has been edited from online sources. 
+    See notebook for details.
 
     Parameters
     ----------
-    model_knn: sklearn model, knn model
+    model_knn: sklearn model, knn model (trained)
 
     data: movie-user matrix
 
@@ -97,18 +98,10 @@ def make_recommendation(model_knn, data, mapper, fav_movie, n_recommendations):
     ------
     list of top n similar movie recommendations
     """
-    # fit
-    # define model
-    #model_knn = NearestNeighbors(metric='cosine', algorithm='brute', n_neighbors=10, n_jobs=-1)
-    # fit
-    #model_knn.fit(movie_user_mat_sparse)
-    
+
     # get input movie index
-    #print('You have input movie:', fav_movie)
     idx = fuzzy_matching(mapper, fav_movie, verbose=True)
     # inference
-    #print('Recommendation system start to make inference')
-    #print('......\n')
     distances, indices = model_knn.kneighbors(data[idx], n_neighbors=n_recommendations+1)
     # get list of raw idx of recommendations
     raw_recommends = \
@@ -140,12 +133,17 @@ def collab_model(movie_list,top_n=10):
         Titles of the top-n movie recommendations to the user.
 
     """
+
+    # load the ratings file. loading each time ensures that each selection
+    # is seen as a new user.
     ratings = pd.read_csv('resources/data/ratings.csv')
     ratings.drop('timestamp', axis=1, inplace=True)
+    
     # get rating frequency
     df_movies_cnt = pd.DataFrame(ratings.groupby('movieId').size(), columns=['count'])
 
-    # filter data
+    # filter data via movies
+    # change the amount of ratings a movie needs to stay in the system
     popularity_thres = 24
     popular_movies = list(set(df_movies_cnt.query('count >= @popularity_thres').index))
     df_ratings_drop_movies = ratings[ratings.movieId.isin(popular_movies)]
@@ -153,20 +151,25 @@ def collab_model(movie_list,top_n=10):
     # get number of ratings given by every user
     df_users_cnt = pd.DataFrame(df_ratings_drop_movies.groupby('userId').size(), columns=['count'])
 
+    # filter ratings via users
+    # change the number to remove users who rate too little
     ratings_thres = 20
     active_users = list(set(df_users_cnt.query('count >= @ratings_thres').index))
     df_ratings_drop_users = df_ratings_drop_movies[df_ratings_drop_movies.userId.isin(active_users)]
 
+    #reload csv of movies
     movies = pd.read_csv('resources/data/movies.csv')
     movies = movies.set_index('movieId')
 
+    # add the selection of movies to the training set
+    # this is a fix for the cold start issue and the user 
+    # who made the selection has now been added to the system
     df_ratings_drop_users = df_ratings_drop_users.append({'userId':672, 'movieId': movies[movies.title == movie_list[0]].index[0], 'rating': 5 } , ignore_index=True)
     df_ratings_drop_users = df_ratings_drop_users.append({'userId':672, 'movieId': movies[movies.title == movie_list[1]].index[0], 'rating': 5 } , ignore_index=True)
     df_ratings_drop_users = df_ratings_drop_users.append({'userId':672, 'movieId': movies[movies.title == movie_list[2]].index[0], 'rating': 5 } , ignore_index=True)
     df_ratings_drop_users = df_ratings_drop_users.drop_duplicates() 
 
     # pivot and create movie-user matrix
-
     movie_user_mat = df_ratings_drop_users.pivot(index='movieId', columns='userId', values='rating').fillna(0)
 
     # create mapper from movie title to index
@@ -174,14 +177,17 @@ def collab_model(movie_list,top_n=10):
         movie: i for i, movie in 
         enumerate(list(movies.loc[movie_user_mat.index].title)) #check index hasnt been made already
     }
+    
     # transform matrix to scipy sparse matrix
     movie_user_mat_sparse = csr_matrix(movie_user_mat.values)
-
+    
+    #initiate the KNN model and fit the data
     model_knn = NearestNeighbors(metric='cosine', algorithm='brute', n_neighbors=10, n_jobs=-1)
-    # fit
     model_knn.fit(movie_user_mat_sparse)
 
     final_list = []
+
+    #make individual recommendations for each selected movie
 
     rec1 =   make_recommendation(
             model_knn=model_knn,
@@ -204,6 +210,7 @@ def collab_model(movie_list,top_n=10):
             mapper=movie_to_idx,
             n_recommendations=15)
 
+    # append all recommendations to one list 
     for i in rec1:
         final_list.append(i)
     for i in rec2:
@@ -213,6 +220,8 @@ def collab_model(movie_list,top_n=10):
 
     final_f = []
     
+    # ensure the recommendations provided do not include the
+    # selected movies or duplicated items
     for i in final_list:
         if i not in movie_list:
             final_f.append(i)
